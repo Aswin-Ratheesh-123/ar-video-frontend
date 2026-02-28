@@ -31,20 +31,20 @@
 //         imageTargetSrc: `${API_BASE}/mind/targets.mind`,
 //         uiScanning: "no",
 //         filterMinCF: 0.001,
-//         filterBeta: 0.01
+//         filterBeta: 0.01,
 //       });
 
 //       const { renderer, scene, camera } = mindarThree;
 
 //       const raycaster = new THREE.Raycaster();
+//       raycaster.params.Mesh.threshold = 0.2; // 🔥 more sensitive
+
 //       const mouse = new THREE.Vector2();
 //       const clickableObjects = [];
-
 //       const smoothedObjects = [];
 
 //       /* ================= CREATE TARGETS ================= */
 //       targets.forEach((t) => {
-
 //         const anchor = mindarThree.addAnchor(t.index);
 
 //         const video = document.createElement("video");
@@ -55,12 +55,11 @@
 //         video.preload = "auto";
 
 //         video.addEventListener("loadedmetadata", () => {
-
 //           const ratio = video.videoWidth / video.videoHeight;
 //           const height = 1;
 //           const width = height * ratio;
 
-//           /* ========== VIDEO ========== */
+//           /* ========= VIDEO ========= */
 //           const texture = new THREE.VideoTexture(video);
 //           texture.colorSpace = THREE.SRGBColorSpace;
 
@@ -74,7 +73,7 @@
 
 //           anchor.group.add(videoPlane);
 
-//           /* ========== COMPANY NAME TOP ========== */
+//           /* ========= COMPANY NAME ========= */
 //           const canvasTop = document.createElement("canvas");
 //           canvasTop.width = 1024;
 //           canvasTop.height = 256;
@@ -99,7 +98,7 @@
 //           topPlane.position.set(0, height / 2 + 0.2, 0.01);
 //           anchor.group.add(topPlane);
 
-//           /* ========== LOGOS LEFT & RIGHT ========== */
+//           /* ========= LOGOS ========= */
 //           if (t.companyLogo) {
 //             const logoTexture = new THREE.TextureLoader().load(
 //               `${API_BASE}/${t.companyLogo}`
@@ -129,7 +128,7 @@
 //             anchor.group.add(rightLogo);
 //           }
 
-//           /* ========== VISIT BUTTON ========== */
+//           /* ========= VISIT BUTTON ========= */
 //           const canvasBottom = document.createElement("canvas");
 //           canvasBottom.width = 1024;
 //           canvasBottom.height = 256;
@@ -139,7 +138,7 @@
 //           ctxBottom.fillRect(200, 50, 624, 150);
 
 //           ctxBottom.fillStyle = "white";
-//           ctxBottom.font = "bold 70px Arial";
+//           ctxBottom.font = "bold 90px Arial";
 //           ctxBottom.textAlign = "center";
 //           ctxBottom.fillText("Visit Us", 512, 150);
 
@@ -151,25 +150,35 @@
 //             })
 //           );
 
-//           bottomPlane.position.set(0, -height / 2 - 0.3, 0.01);
+//           bottomPlane.position.set(0, -height / 2 - 0.45, 0.01);
 //           anchor.group.add(bottomPlane);
 
+//           /* 🔥 BIGGER INVISIBLE HIT AREA */
+//           const hitArea = new THREE.Mesh(
+//             new THREE.PlaneGeometry(width * 1.2, 0.7),
+//             new THREE.MeshBasicMaterial({
+//               transparent: true,
+//               opacity: 0,
+//             })
+//           );
+
+//           hitArea.position.copy(bottomPlane.position);
+//           anchor.group.add(hitArea);
+
 //           clickableObjects.push({
-//             mesh: bottomPlane,
+//             mesh: hitArea,
 //             url: t.companyUrl,
 //           });
 
-//           /* ========== SMOOTHING REGISTER ========== */
+//           /* ========= SMOOTHING ========= */
 //           smoothedObjects.push({
 //             anchor,
 //             group: anchor.group,
 //             position: new THREE.Vector3(),
 //             quaternion: new THREE.Quaternion(),
 //           });
-
 //         });
 
-//         /* ====== VIDEO PLAY CONTROL ====== */
 //         anchor.onTargetFound = () => {
 //           video.play().catch(() => { });
 //         };
@@ -177,12 +186,10 @@
 //         anchor.onTargetLost = () => {
 //           video.pause();
 //         };
-
 //       });
 
-//       /* ========== CLICK HANDLER ========== */
-//       window.addEventListener("click", (event) => {
-
+//       /* ================= MOBILE FRIENDLY CLICK ================= */
+//       window.addEventListener("pointerdown", (event) => {
 //         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
 //         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
@@ -200,8 +207,6 @@
 //       await mindarThree.start();
 
 //       renderer.setAnimationLoop(() => {
-
-//         /* ===== SMOOTHING LOGIC ===== */
 //         smoothedObjects.forEach((item) => {
 //           if (!item.anchor.group.visible) return;
 
@@ -215,7 +220,7 @@
 //         renderer.render(scene, camera);
 //       });
 
-//       console.log("✅ AR Started - Stable Mode");
+//       console.log("✅ AR Started - Ultra Stable Mobile Mode");
 //     };
 
 //     start();
@@ -235,6 +240,8 @@
 //     />
 //   );
 // }
+
+
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
@@ -273,7 +280,7 @@ export default function ARViewer() {
       const { renderer, scene, camera } = mindarThree;
 
       const raycaster = new THREE.Raycaster();
-      raycaster.params.Mesh.threshold = 0.2; // 🔥 more sensitive
+      raycaster.params.Mesh.threshold = 0.2;
 
       const mouse = new THREE.Vector2();
       const clickableObjects = [];
@@ -351,7 +358,6 @@ export default function ARViewer() {
               new THREE.PlaneGeometry(logoSize, logoSize),
               logoMaterial
             );
-
             leftLogo.position.set(-width / 2 - 0.4, 0, 0.01);
             anchor.group.add(leftLogo);
 
@@ -359,7 +365,6 @@ export default function ARViewer() {
               new THREE.PlaneGeometry(logoSize, logoSize),
               logoMaterial
             );
-
             rightLogo.position.set(width / 2 + 0.4, 0, 0.01);
             anchor.group.add(rightLogo);
           }
@@ -424,7 +429,7 @@ export default function ARViewer() {
         };
       });
 
-      /* ================= MOBILE FRIENDLY CLICK ================= */
+      /* ================= IOS SAFE TOUCH HANDLER ================= */
       window.addEventListener("pointerdown", (event) => {
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -434,7 +439,8 @@ export default function ARViewer() {
         clickableObjects.forEach((obj) => {
           const intersects = raycaster.intersectObject(obj.mesh);
           if (intersects.length > 0 && obj.url) {
-            window.open(obj.url, "_blank");
+            // 🔥 Safari safe redirect
+            window.location.assign(obj.url);
           }
         });
       });
@@ -456,7 +462,7 @@ export default function ARViewer() {
         renderer.render(scene, camera);
       });
 
-      console.log("✅ AR Started - Ultra Stable Mobile Mode");
+      console.log("✅ AR Started - iOS & Android Safe Mode");
     };
 
     start();
