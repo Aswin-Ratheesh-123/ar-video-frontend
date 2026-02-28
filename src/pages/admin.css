@@ -1,0 +1,240 @@
+/*
+.admin-page {
+    padding: 16px;
+    background: #111;
+    min-height: 100vh;
+    color: white;
+    font-family: system-ui;
+}
+
+.title {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+
+.admin-grid {
+    display: grid;
+    gap: 16px;
+}
+
+
+@media (min-width: 768px) {
+    .admin-grid {
+        grid-template-columns: 1fr 2fr;
+    }
+}
+
+.upload-card,
+.targets-card {
+    background: #1e1e1e;
+    padding: 16px;
+    border-radius: 12px;
+}
+
+
+.upload-card input {
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 10px;
+    border-radius: 6px;
+    border: none;
+}
+
+
+.upload-card button {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    background: #00c853;
+    color: white;
+    font-weight: bold;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+
+ .targets-list {
+  overflow-y: auto;   
+  flex: 1;            
+
+  display: grid;
+  gap: 12px;
+  padding-right: 6px;
+}
+
+.targets-card {
+  background: #1e1e1e;
+  padding: 16px;
+  border-radius: 12px;
+
+  display: flex;
+  flex-direction: column;
+
+  height: 75vh;   
+}
+
+
+.target-item {
+    background: #2a2a2a;
+    padding: 10px;
+    border-radius: 8px;
+}
+
+
+.target-item video {
+    width: 100%;
+    border-radius: 6px;
+} */
+
+/* =========================
+   PAGE
+========================= */
+.admin-page {
+  padding: 14px;
+  background: #0f0f0f;
+  min-height: 100vh;
+  color: white;
+  font-family: system-ui;
+}
+
+/* title */
+.title {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+/* =========================
+   GRID
+========================= */
+.admin-grid {
+  display: grid;
+  gap: 16px;
+}
+
+/* media container */
+.media-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 10%;
+}
+
+/* image + video styling */
+.media-wrapper img,
+.media-wrapper video {
+
+  border-radius: 10px;
+}
+
+
+/* Desktop */
+@media (min-width: 768px) {
+  .admin-grid {
+    grid-template-columns: 1fr 2fr;
+  }
+}
+
+/* =========================
+   CARDS
+========================= */
+.upload-card,
+.targets-card {
+  background: #1b1b1b;
+  padding: 14px;
+  border-radius: 14px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
+}
+
+/* =========================
+   FORM
+========================= */
+.upload-card input {
+
+  padding: 14px;
+  font-size: 16px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  border: none;
+}
+
+.upload-card button {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  border-radius: 8px;
+  border: none;
+  background: #00c853;
+  font-weight: bold;
+}
+
+/* =========================
+   TARGETS
+========================= */
+.targets-card {
+  display: flex;
+  flex-direction: column;
+  height: 75vh;
+}
+
+.targets-list {
+  overflow-y: auto;
+  flex: 1;
+
+  display: grid;
+  gap: 12px;
+  padding-right: 6px;
+}
+
+/* item */
+.target-item {
+  background: #262626;
+  padding: 10px;
+  border-radius: 10px;
+}
+
+/* video preview */
+.target-item video {
+  width: 100%;
+  border-radius: 8px;
+}
+
+/* =========================
+   📱 MOBILE SPECIAL FIXES
+========================= */
+@media (max-width: 768px) {
+
+  .admin-page {
+    padding: 10px;
+  }
+
+  /* smaller preview on mobile */
+  .target-item video {
+    max-height: 160px;
+    object-fit: cover;
+  }
+
+  /* tighter cards */
+  .target-item {
+    padding: 8px;
+  }
+
+  /* better scroll area */
+  .targets-card {
+    height: 65vh;
+  }
+
+  /* big tap area */
+  button {
+    min-height: 48px;
+  }
+
+  .media-wrapper {
+    flex-direction: row;
+  }
+
+  .media-wrapper img,
+  .media-wrapper video {
+    width: 50%;
+  }
+}
