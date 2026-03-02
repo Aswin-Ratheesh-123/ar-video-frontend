@@ -51,7 +51,7 @@ export default function ARViewer() {
         video.crossOrigin = "anonymous";
         video.loop = true;
         video.playsInline = true;
-        video.preload = "auto";
+
 
         video.addEventListener("loadedmetadata", () => {
           const ratio = video.videoWidth / video.videoHeight;
