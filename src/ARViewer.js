@@ -240,238 +240,244 @@
 // }
 
 
-
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { MindARThree } from "mind-ar/dist/mindar-image-three.prod.js";
 import { API_BASE } from "./config";
 
 export default function ARViewer() {
   const containerRef = useRef(null);
-  const [started, setStarted] = useState(false);
+  const startedRef = useRef(false);
 
-  const startAR = async () => {
-    setStarted(true);
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
 
-    let targets = [];
+    const start = async () => {
+      let targets = [];
 
-    /* ================= FETCH TARGETS ================= */
-    try {
-      const res = await fetch(`${API_BASE}/api/targets`);
-      targets = await res.json();
-    } catch (err) {
-      console.error("Backend not reachable:", err);
-      return;
-    }
+      /* ================= FETCH TARGETS ================= */
+      try {
+        const res = await fetch(`${API_BASE}/api/targets`);
+        targets = await res.json();
+      } catch (err) {
+        console.error("Backend not reachable:", err);
+        return;
+      }
 
-    /* ================= INIT MINDAR ================= */
-    const mindarThree = new MindARThree({
-      container: containerRef.current,
-      imageTargetSrc: `${API_BASE}/mind/targets.mind`,
-      uiScanning: "no",
-      filterMinCF: 0.001,
-      filterBeta: 0.01,
-    });
+      /* ================= UNLOCK AUDIO FOR IPHONE ================= */
+      let audioUnlocked = false;
 
-    const { renderer, scene, camera } = mindarThree;
+      const unlockAudio = async () => {
+        if (audioUnlocked || targets.length === 0) return;
 
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-    const clickableObjects = [];
-    const smoothedObjects = [];
-
-    /* ================= CREATE TARGETS ================= */
-    targets.forEach((t) => {
-      const anchor = mindarThree.addAnchor(t.index);
-
-      /* ========= VIDEO ========= */
-      const video = document.createElement("video");
-      video.src = `${API_BASE}/${t.videoPath}`;
-      video.crossOrigin = "anonymous";
-      video.loop = true;
-      video.playsInline = true;
-      video.muted = false; // 🔥 UNMUTED
-      video.volume = 1;
-      video.preload = "auto";
-      video.setAttribute("webkit-playsinline", "true");
-
-      video.addEventListener("loadedmetadata", () => {
-        const ratio = video.videoWidth / video.videoHeight;
-        const height = 1;
-        const width = height * ratio;
-
-        const texture = new THREE.VideoTexture(video);
-        texture.colorSpace = THREE.SRGBColorSpace;
-
-        const videoPlane = new THREE.Mesh(
-          new THREE.PlaneGeometry(width, height),
-          new THREE.MeshBasicMaterial({
-            map: texture,
-            side: THREE.DoubleSide,
-          })
-        );
-
-        anchor.group.add(videoPlane);
-
-        /* ========= COMPANY NAME ========= */
-        const canvasTop = document.createElement("canvas");
-        canvasTop.width = 1024;
-        canvasTop.height = 256;
-        const ctxTop = canvasTop.getContext("2d");
-
-        ctxTop.fillStyle = "rgba(0,0,0,0.7)";
-        ctxTop.fillRect(0, 0, 1024, 256);
-
-        ctxTop.fillStyle = "white";
-        ctxTop.font = "bold 80px Arial";
-        ctxTop.textAlign = "center";
-        ctxTop.fillText(t.companyName || "", 512, 160);
-
-        const topPlane = new THREE.Mesh(
-          new THREE.PlaneGeometry(width, 0.25),
-          new THREE.MeshBasicMaterial({
-            map: new THREE.CanvasTexture(canvasTop),
-            transparent: true,
-          })
-        );
-
-        topPlane.position.set(0, height / 2 + 0.2, 0.01);
-        anchor.group.add(topPlane);
-
-        /* ========= VISIT BUTTON ========= */
-        const canvasBottom = document.createElement("canvas");
-        canvasBottom.width = 1024;
-        canvasBottom.height = 256;
-        const ctxBottom = canvasBottom.getContext("2d");
-
-        ctxBottom.fillStyle = "#00c853";
-        ctxBottom.fillRect(150, 40, 724, 180);
-
-        ctxBottom.fillStyle = "white";
-        ctxBottom.font = "bold 100px Arial";
-        ctxBottom.textAlign = "center";
-        ctxBottom.fillText("Visit Us", 512, 165);
-
-        const bottomPlane = new THREE.Mesh(
-          new THREE.PlaneGeometry(width * 1.1, 0.5),
-          new THREE.MeshBasicMaterial({
-            map: new THREE.CanvasTexture(canvasBottom),
-            transparent: true,
-          })
-        );
-
-        bottomPlane.position.set(0, -height / 2 - 0.55, 0.01);
-        anchor.group.add(bottomPlane);
-
-        /* BIG HIT AREA */
-        const hitArea = new THREE.Mesh(
-          new THREE.PlaneGeometry(width * 1.4, 0.9),
-          new THREE.MeshBasicMaterial({
-            transparent: true,
-            opacity: 0,
-          })
-        );
-
-        hitArea.position.copy(bottomPlane.position);
-        anchor.group.add(hitArea);
-
-        clickableObjects.push({
-          mesh: hitArea,
-          url: t.companyUrl,
-        });
-
-        smoothedObjects.push({
-          anchor,
-          group: anchor.group,
-          position: new THREE.Vector3(),
-          quaternion: new THREE.Quaternion(),
-        });
-      });
-
-      /* ========= PLAY CONTROL ========= */
-      anchor.onTargetFound = async () => {
         try {
-          await video.play(); // 🔥 allowed because user tapped Start AR
+          const tempVideo = document.createElement("video");
+          tempVideo.src = `${API_BASE}/${targets[0].videoPath}`;
+          tempVideo.playsInline = true;
+          tempVideo.muted = false;
+          tempVideo.volume = 1;
+          tempVideo.setAttribute("webkit-playsinline", "true");
+
+          await tempVideo.play();
+          tempVideo.pause();
+
+          audioUnlocked = true;
+          console.log("🔓 iPhone audio unlocked");
         } catch (e) {
-          console.log("Play blocked:", e);
+          console.log("Audio unlock blocked", e);
         }
       };
 
-      anchor.onTargetLost = () => {
-        video.pause();
-      };
-    });
+      // Unlock on first touch anywhere
+      window.addEventListener("pointerdown", unlockAudio, { once: true });
 
-    /* ================= CLICK HANDLER ================= */
-    window.addEventListener("pointerdown", (event) => {
-      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-      raycaster.setFromCamera(mouse, camera);
-
-      clickableObjects.forEach((obj) => {
-        const intersects = raycaster.intersectObject(obj.mesh);
-        if (intersects.length > 0 && obj.url) {
-          window.location.assign(obj.url);
-        }
-      });
-    });
-
-    /* ================= START AR ================= */
-    await mindarThree.start();
-
-    renderer.setAnimationLoop(() => {
-      smoothedObjects.forEach((item) => {
-        if (!item.anchor.group.visible) return;
-
-        item.position.lerp(item.anchor.group.position, 0.08);
-        item.group.position.copy(item.position);
-
-        item.quaternion.slerp(item.anchor.group.quaternion, 0.08);
-        item.group.quaternion.copy(item.quaternion);
+      /* ================= INIT MINDAR ================= */
+      const mindarThree = new MindARThree({
+        container: containerRef.current,
+        imageTargetSrc: `${API_BASE}/mind/targets.mind`,
+        uiScanning: "no",
+        filterMinCF: 0.001,
+        filterBeta: 0.01,
       });
 
-      renderer.render(scene, camera);
-    });
+      const { renderer, scene, camera } = mindarThree;
 
-    console.log("✅ AR Started with Unmuted iPhone Support");
-  };
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+      const clickableObjects = [];
+      const smoothedObjects = [];
 
-  /* ================= UI ================= */
+      /* ================= CREATE TARGETS ================= */
+      targets.forEach((t) => {
+        const anchor = mindarThree.addAnchor(t.index);
+
+        const video = document.createElement("video");
+        video.src = `${API_BASE}/${t.videoPath}`;
+        video.crossOrigin = "anonymous";
+        video.loop = true;
+        video.playsInline = true;
+        video.muted = false; // 🔥 UNMUTED
+        video.volume = 1;
+        video.preload = "auto";
+        video.setAttribute("webkit-playsinline", "true");
+
+        video.addEventListener("loadedmetadata", () => {
+          const ratio = video.videoWidth / video.videoHeight;
+          const height = 1;
+          const width = height * ratio;
+
+          /* ========= VIDEO ========= */
+          const texture = new THREE.VideoTexture(video);
+          texture.colorSpace = THREE.SRGBColorSpace;
+
+          const videoPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(width, height),
+            new THREE.MeshBasicMaterial({
+              map: texture,
+              side: THREE.DoubleSide,
+            })
+          );
+
+          anchor.group.add(videoPlane);
+
+          /* ========= COMPANY NAME ========= */
+          const canvasTop = document.createElement("canvas");
+          canvasTop.width = 1024;
+          canvasTop.height = 256;
+          const ctxTop = canvasTop.getContext("2d");
+
+          ctxTop.fillStyle = "rgba(0,0,0,0.7)";
+          ctxTop.fillRect(0, 0, 1024, 256);
+
+          ctxTop.fillStyle = "white";
+          ctxTop.font = "bold 80px Arial";
+          ctxTop.textAlign = "center";
+          ctxTop.fillText(t.companyName || "", 512, 160);
+
+          const topPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(width, 0.25),
+            new THREE.MeshBasicMaterial({
+              map: new THREE.CanvasTexture(canvasTop),
+              transparent: true,
+            })
+          );
+
+          topPlane.position.set(0, height / 2 + 0.2, 0.01);
+          anchor.group.add(topPlane);
+
+          /* ========= VISIT BUTTON ========= */
+          const canvasBottom = document.createElement("canvas");
+          canvasBottom.width = 1024;
+          canvasBottom.height = 256;
+          const ctxBottom = canvasBottom.getContext("2d");
+
+          ctxBottom.fillStyle = "#00c853";
+          ctxBottom.fillRect(200, 50, 624, 150);
+
+          ctxBottom.fillStyle = "white";
+          ctxBottom.font = "bold 90px Arial";
+          ctxBottom.textAlign = "center";
+          ctxBottom.fillText("Visit Us", 512, 150);
+
+          const bottomPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(width * 0.9, 0.4),
+            new THREE.MeshBasicMaterial({
+              map: new THREE.CanvasTexture(canvasBottom),
+              transparent: true,
+            })
+          );
+
+          bottomPlane.position.set(0, -height / 2 - 0.45, 0.01);
+          anchor.group.add(bottomPlane);
+
+          /* HIT AREA */
+          const hitArea = new THREE.Mesh(
+            new THREE.PlaneGeometry(width * 1.2, 0.7),
+            new THREE.MeshBasicMaterial({
+              transparent: true,
+              opacity: 0,
+            })
+          );
+
+          hitArea.position.copy(bottomPlane.position);
+          anchor.group.add(hitArea);
+
+          clickableObjects.push({
+            mesh: hitArea,
+            url: t.companyUrl,
+          });
+
+          smoothedObjects.push({
+            anchor,
+            group: anchor.group,
+            position: new THREE.Vector3(),
+            quaternion: new THREE.Quaternion(),
+          });
+        });
+
+        anchor.onTargetFound = async () => {
+          try {
+            await video.play();
+          } catch (e) {
+            console.log("Play blocked:", e);
+          }
+        };
+
+        anchor.onTargetLost = () => {
+          video.pause();
+        };
+      });
+
+      /* ================= CLICK HANDLER ================= */
+      window.addEventListener("pointerdown", (event) => {
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+
+        clickableObjects.forEach((obj) => {
+          const intersects = raycaster.intersectObject(obj.mesh);
+          if (intersects.length > 0 && obj.url) {
+            window.location.assign(obj.url);
+          }
+        });
+      });
+
+      /* ================= START AR ================= */
+      await mindarThree.start();
+
+      renderer.setAnimationLoop(() => {
+        smoothedObjects.forEach((item) => {
+          if (!item.anchor.group.visible) return;
+
+          item.position.lerp(item.anchor.group.position, 0.08);
+          item.group.position.copy(item.position);
+
+          item.quaternion.slerp(item.anchor.group.quaternion, 0.08);
+          item.group.quaternion.copy(item.quaternion);
+        });
+
+        renderer.render(scene, camera);
+      });
+
+      console.log("✅ AR Started - iPhone Unmuted Working");
+    };
+
+    start();
+  }, []);
+
   return (
-    <>
-      {!started && (
-        <div
-          onClick={startAR}
-          style={{
-            position: "fixed",
-            width: "100vw",
-            height: "100vh",
-            background: "black",
-            color: "white",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            fontSize: "22px",
-            zIndex: 10,
-            cursor: "pointer",
-          }}
-        >
-          Tap to Start AR Experience
-        </div>
-      )}
-
-      <div
-        ref={containerRef}
-        style={{
-          width: "100vw",
-          height: "100vh",
-          position: "fixed",
-          top: 0,
-          left: 0,
-          background: "black",
-        }}
-      />
-    </>
+    <div
+      ref={containerRef}
+      style={{
+        width: "100vw",
+        height: "100vh",
+        position: "fixed",
+        top: 0,
+        left: 0,
+        background: "black",
+      }}
+    />
   );
 }
