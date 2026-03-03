@@ -239,6 +239,10 @@
 //   );
 // }
 
+
+
+
+
 // import { useEffect, useRef } from "react";
 // import * as THREE from "three";
 // import { MindARThree } from "mind-ar/dist/mindar-image-three.prod.js";
@@ -446,6 +450,7 @@
 
 
 
+
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { MindARThree } from "mind-ar/dist/mindar-image-three.prod.js";
@@ -462,6 +467,7 @@ export default function ARViewer() {
     const start = async () => {
       let targets = [];
 
+      /* ================= FETCH TARGETS ================= */
       try {
         const res = await fetch(`${API_BASE}/api/targets`);
         targets = await res.json();
@@ -470,10 +476,13 @@ export default function ARViewer() {
         return;
       }
 
+      /* ================= INIT MINDAR ================= */
       const mindarThree = new MindARThree({
         container: containerRef.current,
-        imageTargetSrc: `${API_BASE}/mind/targets.mind?${Date.now()}`,
+        imageTargetSrc: `${API_BASE}/mind/targets.mind`,
         uiScanning: "no",
+        filterMinCF: 0.001,
+        filterBeta: 0.01,
       });
 
       const { renderer, scene, camera } = mindarThree;
@@ -483,7 +492,6 @@ export default function ARViewer() {
       const clickableObjects = [];
 
       targets.forEach((t) => {
-
         const anchor = mindarThree.addAnchor(t.index);
 
         const video = document.createElement("video");
@@ -491,111 +499,130 @@ export default function ARViewer() {
         video.crossOrigin = "anonymous";
         video.loop = true;
         video.playsInline = true;
+        video.setAttribute("webkit-playsinline", "true");
+        video.preload = "auto";
 
-        video.onloadedmetadata = () => {
+        // Safari requirement
+        video.muted = true;
 
-          const ratio = video.videoWidth / video.videoHeight;
-          const height = 1;
-          const width = height * ratio;
+        let videoPlane = null;
 
-          /* ================= VIDEO ================= */
-          const texture = new THREE.VideoTexture(video);
-          const videoPlane = new THREE.Mesh(
-            new THREE.PlaneGeometry(width, height),
-            new THREE.MeshBasicMaterial({
-              map: texture,
-              side: THREE.DoubleSide,
-            })
-          );
+        /* ================= TARGET FOUND ================= */
+        anchor.onTargetFound = async () => {
+          try {
+            await video.play();
 
-          anchor.group.add(videoPlane);
+            // 🔥 WAIT UNTIL SAFARI ACTUALLY HAS FRAME DATA
+            await new Promise((resolve) => {
+              if (video.readyState >= 3) {
+                resolve();
+              } else {
+                video.addEventListener("canplay", resolve, { once: true });
+              }
+            });
 
-          /* ================= COMPANY NAME ================= */
-          const canvasTop = document.createElement("canvas");
-          canvasTop.width = 1024;
-          canvasTop.height = 256;
-          const ctxTop = canvasTop.getContext("2d");
+            // Force small time jump to ensure frame upload
+            if (video.currentTime === 0) {
+              video.currentTime = 0.01;
+            }
 
-          ctxTop.fillStyle = "rgba(0,0,0,0.7)";
-          ctxTop.fillRect(0, 0, canvasTop.width, canvasTop.height);
+            // Create texture ONLY after frame ready
+            if (!videoPlane) {
+              const ratio = video.videoWidth / video.videoHeight;
+              const height = 1;
+              const width = height * ratio;
 
-          ctxTop.fillStyle = "white";
-          ctxTop.font = "bold 80px Arial";
-          ctxTop.textAlign = "center";
-          ctxTop.fillText(t.companyName, canvasTop.width / 2, 160);
+              const texture = new THREE.VideoTexture(video);
+              texture.colorSpace = THREE.SRGBColorSpace;
+              texture.needsUpdate = true;
 
-          const topTexture = new THREE.CanvasTexture(canvasTop);
+              videoPlane = new THREE.Mesh(
+                new THREE.PlaneGeometry(width, height),
+                new THREE.MeshBasicMaterial({
+                  map: texture,
+                  side: THREE.DoubleSide,
+                })
+              );
 
-          const topPlane = new THREE.Mesh(
-            new THREE.PlaneGeometry(width, 0.25),
-            new THREE.MeshBasicMaterial({ map: topTexture, transparent: true })
-          );
+              anchor.group.add(videoPlane);
 
-          topPlane.position.set(0, height / 2 + 0.2, 0.01);
-          anchor.group.add(topPlane);
+              /* ===== COMPANY NAME ===== */
+              const canvasTop = document.createElement("canvas");
+              canvasTop.width = 1024;
+              canvasTop.height = 256;
+              const ctxTop = canvasTop.getContext("2d");
 
-          /* ================= LOGOS (LEFT + RIGHT) ================= */
+              ctxTop.fillStyle = "rgba(0,0,0,0.7)";
+              ctxTop.fillRect(0, 0, 1024, 256);
 
-          const logoTexture = new THREE.TextureLoader().load(
-            `${API_BASE}/${t.companyLogo}`
-          );
+              ctxTop.fillStyle = "white";
+              ctxTop.font = "bold 80px Arial";
+              ctxTop.textAlign = "center";
+              ctxTop.fillText(t.companyName || "", 512, 160);
 
-          const logoMaterial = new THREE.MeshBasicMaterial({
-            map: logoTexture,
-            transparent: true,
-          });
+              const topPlane = new THREE.Mesh(
+                new THREE.PlaneGeometry(width, 0.25),
+                new THREE.MeshBasicMaterial({
+                  map: new THREE.CanvasTexture(canvasTop),
+                  transparent: true,
+                })
+              );
 
-          const logoSize = height * 0.6;
+              topPlane.position.set(0, height / 2 + 0.2, 0.01);
+              anchor.group.add(topPlane);
 
-          const leftLogo = new THREE.Mesh(
-            new THREE.PlaneGeometry(logoSize, logoSize),
-            logoMaterial
-          );
+              /* ===== VISIT BUTTON ===== */
+              const canvasBottom = document.createElement("canvas");
+              canvasBottom.width = 1024;
+              canvasBottom.height = 256;
+              const ctxBottom = canvasBottom.getContext("2d");
 
-          leftLogo.position.set(-width / 2 - 0.4, 0, 0.01);
-          anchor.group.add(leftLogo);
+              ctxBottom.fillStyle = "#00c853";
+              ctxBottom.fillRect(150, 40, 724, 170);
 
-          const rightLogo = new THREE.Mesh(
-            new THREE.PlaneGeometry(logoSize, logoSize),
-            logoMaterial
-          );
+              ctxBottom.fillStyle = "white";
+              ctxBottom.font = "bold 100px Arial";
+              ctxBottom.textAlign = "center";
+              ctxBottom.fillText("Visit Us", 512, 170);
 
-          rightLogo.position.set(width / 2 + 0.4, 0, 0.01);
-          anchor.group.add(rightLogo);
+              const bottomPlane = new THREE.Mesh(
+                new THREE.PlaneGeometry(width * 0.95, 0.5),
+                new THREE.MeshBasicMaterial({
+                  map: new THREE.CanvasTexture(canvasBottom),
+                  transparent: true,
+                })
+              );
 
-          /* ================= VISIT BUTTON ================= */
+              bottomPlane.position.set(0, -height / 2 - 0.55, 0.01);
+              anchor.group.add(bottomPlane);
 
-          const canvasBottom = document.createElement("canvas");
-          canvasBottom.width = 1024;
-          canvasBottom.height = 256;
-          const ctxBottom = canvasBottom.getContext("2d");
+              // Larger invisible hit area
+              const hitArea = new THREE.Mesh(
+                new THREE.PlaneGeometry(width * 1.3, 0.8),
+                new THREE.MeshBasicMaterial({
+                  transparent: true,
+                  opacity: 0,
+                })
+              );
 
-          ctxBottom.fillStyle = "#00c853";
-          ctxBottom.fillRect(200, 50, 624, 150);
+              hitArea.position.copy(bottomPlane.position);
+              anchor.group.add(hitArea);
 
-          ctxBottom.fillStyle = "white";
-          ctxBottom.font = "bold 70px Arial";
-          ctxBottom.textAlign = "center";
-          ctxBottom.fillText("Visit Us", canvasBottom.width / 2, 150);
+              clickableObjects.push({
+                mesh: hitArea,
+                url: t.companyUrl,
+              });
+            }
 
-          const bottomTexture = new THREE.CanvasTexture(canvasBottom);
+            // 🔥 UNMUTE AFTER FRAME ATTACHED
+            setTimeout(() => {
+              video.muted = false;
+              video.volume = 1;
+            }, 300);
 
-          const bottomPlane = new THREE.Mesh(
-            new THREE.PlaneGeometry(width * 0.8, 0.25),
-            new THREE.MeshBasicMaterial({ map: bottomTexture, transparent: true })
-          );
-
-          bottomPlane.position.set(0, -height / 2 - 0.3, 0.01);
-          anchor.group.add(bottomPlane);
-
-          clickableObjects.push({
-            mesh: bottomPlane,
-            url: t.companyUrl,
-          });
-        };
-
-        anchor.onTargetFound = () => {
-          video.play();
+          } catch (err) {
+            console.log("Play blocked:", err);
+          }
         };
 
         anchor.onTargetLost = () => {
@@ -603,9 +630,8 @@ export default function ARViewer() {
         };
       });
 
-      /* CLICK HANDLER */
-      window.addEventListener("click", (event) => {
-
+      /* ================= CLICK HANDLER ================= */
+      window.addEventListener("pointerdown", (event) => {
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
@@ -613,14 +639,19 @@ export default function ARViewer() {
 
         clickableObjects.forEach((obj) => {
           const intersects = raycaster.intersectObject(obj.mesh);
-          if (intersects.length > 0) {
-            window.open(obj.url, "_blank");
+          if (intersects.length > 0 && obj.url) {
+            window.location.assign(obj.url);
           }
         });
       });
 
       await mindarThree.start();
-      renderer.setAnimationLoop(() => renderer.render(scene, camera));
+
+      renderer.setAnimationLoop(() => {
+        renderer.render(scene, camera);
+      });
+
+      console.log("✅ AR Running (Final Stable Mode)");
     };
 
     start();
