@@ -451,223 +451,128 @@
 
 
 
-import { useEffect, useRef } from "react";
+
+
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { MindARThree } from "mind-ar/dist/mindar-image-three.prod.js";
 import { API_BASE } from "./config";
 
 export default function ARViewer() {
   const containerRef = useRef(null);
-  const startedRef = useRef(false);
+  const [started, setStarted] = useState(false);
 
-  useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
+  const startAR = async () => {
+    setStarted(true);
 
-    const start = async () => {
-      let targets = [];
+    let targets = [];
 
-      /* ================= FETCH TARGETS ================= */
-      try {
-        const res = await fetch(`${API_BASE}/api/targets`);
-        targets = await res.json();
-      } catch (err) {
-        console.error("Backend not reachable:", err);
-        return;
-      }
+    try {
+      const res = await fetch(`${API_BASE}/api/targets`);
+      targets = await res.json();
+    } catch (err) {
+      console.error("Backend not reachable:", err);
+      return;
+    }
 
-      /* ================= INIT MINDAR ================= */
-      const mindarThree = new MindARThree({
-        container: containerRef.current,
-        imageTargetSrc: `${API_BASE}/mind/targets.mind`,
-        uiScanning: "no",
-        filterMinCF: 0.001,
-        filterBeta: 0.01,
-      });
+    const mindarThree = new MindARThree({
+      container: containerRef.current,
+      imageTargetSrc: `${API_BASE}/mind/targets.mind`,
+      uiScanning: "no",
+    });
 
-      const { renderer, scene, camera } = mindarThree;
+    const { renderer, scene, camera } = mindarThree;
 
-      const raycaster = new THREE.Raycaster();
-      const mouse = new THREE.Vector2();
-      const clickableObjects = [];
+    targets.forEach((t) => {
+      const anchor = mindarThree.addAnchor(t.index);
 
-      targets.forEach((t) => {
-        const anchor = mindarThree.addAnchor(t.index);
+      const video = document.createElement("video");
+      video.src = `${API_BASE}/${t.videoPath}`;
+      video.crossOrigin = "anonymous";
+      video.loop = true;
+      video.playsInline = true;
+      video.setAttribute("webkit-playsinline", "true");
+      video.preload = "auto";
 
-        const video = document.createElement("video");
-        video.src = `${API_BASE}/${t.videoPath}`;
-        video.crossOrigin = "anonymous";
-        video.loop = true;
-        video.playsInline = true;
-        video.setAttribute("webkit-playsinline", "true");
-        video.preload = "auto";
+      // 🔥 IMPORTANT: NOT muted
+      video.muted = false;
 
-        // Safari requirement
-        video.muted = true;
+      let videoPlane = null;
 
-        let videoPlane = null;
+      anchor.onTargetFound = async () => {
+        try {
+          await video.play();
 
-        /* ================= TARGET FOUND ================= */
-        anchor.onTargetFound = async () => {
-          try {
-            await video.play();
+          if (!videoPlane) {
+            const ratio = video.videoWidth / video.videoHeight;
+            const height = 1;
+            const width = height * ratio;
 
-            // 🔥 WAIT UNTIL SAFARI ACTUALLY HAS FRAME DATA
-            await new Promise((resolve) => {
-              if (video.readyState >= 3) {
-                resolve();
-              } else {
-                video.addEventListener("canplay", resolve, { once: true });
-              }
-            });
+            const texture = new THREE.VideoTexture(video);
+            texture.colorSpace = THREE.SRGBColorSpace;
 
-            // Force small time jump to ensure frame upload
-            if (video.currentTime === 0) {
-              video.currentTime = 0.01;
-            }
+            videoPlane = new THREE.Mesh(
+              new THREE.PlaneGeometry(width, height),
+              new THREE.MeshBasicMaterial({
+                map: texture,
+                side: THREE.DoubleSide,
+              })
+            );
 
-            // Create texture ONLY after frame ready
-            if (!videoPlane) {
-              const ratio = video.videoWidth / video.videoHeight;
-              const height = 1;
-              const width = height * ratio;
-
-              const texture = new THREE.VideoTexture(video);
-              texture.colorSpace = THREE.SRGBColorSpace;
-              texture.needsUpdate = true;
-
-              videoPlane = new THREE.Mesh(
-                new THREE.PlaneGeometry(width, height),
-                new THREE.MeshBasicMaterial({
-                  map: texture,
-                  side: THREE.DoubleSide,
-                })
-              );
-
-              anchor.group.add(videoPlane);
-
-              /* ===== COMPANY NAME ===== */
-              const canvasTop = document.createElement("canvas");
-              canvasTop.width = 1024;
-              canvasTop.height = 256;
-              const ctxTop = canvasTop.getContext("2d");
-
-              ctxTop.fillStyle = "rgba(0,0,0,0.7)";
-              ctxTop.fillRect(0, 0, 1024, 256);
-
-              ctxTop.fillStyle = "white";
-              ctxTop.font = "bold 80px Arial";
-              ctxTop.textAlign = "center";
-              ctxTop.fillText(t.companyName || "", 512, 160);
-
-              const topPlane = new THREE.Mesh(
-                new THREE.PlaneGeometry(width, 0.25),
-                new THREE.MeshBasicMaterial({
-                  map: new THREE.CanvasTexture(canvasTop),
-                  transparent: true,
-                })
-              );
-
-              topPlane.position.set(0, height / 2 + 0.2, 0.01);
-              anchor.group.add(topPlane);
-
-              /* ===== VISIT BUTTON ===== */
-              const canvasBottom = document.createElement("canvas");
-              canvasBottom.width = 1024;
-              canvasBottom.height = 256;
-              const ctxBottom = canvasBottom.getContext("2d");
-
-              ctxBottom.fillStyle = "#00c853";
-              ctxBottom.fillRect(150, 40, 724, 170);
-
-              ctxBottom.fillStyle = "white";
-              ctxBottom.font = "bold 100px Arial";
-              ctxBottom.textAlign = "center";
-              ctxBottom.fillText("Visit Us", 512, 170);
-
-              const bottomPlane = new THREE.Mesh(
-                new THREE.PlaneGeometry(width * 0.95, 0.5),
-                new THREE.MeshBasicMaterial({
-                  map: new THREE.CanvasTexture(canvasBottom),
-                  transparent: true,
-                })
-              );
-
-              bottomPlane.position.set(0, -height / 2 - 0.55, 0.01);
-              anchor.group.add(bottomPlane);
-
-              // Larger invisible hit area
-              const hitArea = new THREE.Mesh(
-                new THREE.PlaneGeometry(width * 1.3, 0.8),
-                new THREE.MeshBasicMaterial({
-                  transparent: true,
-                  opacity: 0,
-                })
-              );
-
-              hitArea.position.copy(bottomPlane.position);
-              anchor.group.add(hitArea);
-
-              clickableObjects.push({
-                mesh: hitArea,
-                url: t.companyUrl,
-              });
-            }
-
-            // 🔥 UNMUTE AFTER FRAME ATTACHED
-            setTimeout(() => {
-              video.muted = false;
-              video.volume = 1;
-            }, 300);
-
-          } catch (err) {
-            console.log("Play blocked:", err);
+            anchor.group.add(videoPlane);
           }
-        };
 
-        anchor.onTargetLost = () => {
-          video.pause();
-        };
-      });
+        } catch (err) {
+          console.log("Playback blocked:", err);
+        }
+      };
 
-      /* ================= CLICK HANDLER ================= */
-      window.addEventListener("pointerdown", (event) => {
-        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      anchor.onTargetLost = () => {
+        video.pause();
+      };
+    });
 
-        raycaster.setFromCamera(mouse, camera);
+    await mindarThree.start();
 
-        clickableObjects.forEach((obj) => {
-          const intersects = raycaster.intersectObject(obj.mesh);
-          if (intersects.length > 0 && obj.url) {
-            window.location.assign(obj.url);
-          }
-        });
-      });
-
-      await mindarThree.start();
-
-      renderer.setAnimationLoop(() => {
-        renderer.render(scene, camera);
-      });
-
-      console.log("✅ AR Running (Final Stable Mode)");
-    };
-
-    start();
-  }, []);
+    renderer.setAnimationLoop(() => {
+      renderer.render(scene, camera);
+    });
+  };
 
   return (
-    <div
-      ref={containerRef}
-      style={{
-        width: "100vw",
-        height: "100vh",
-        position: "fixed",
-        top: 0,
-        left: 0,
-        background: "black",
-      }}
-    />
+    <>
+      {!started && (
+        <div
+          onClick={startAR}
+          style={{
+            position: "fixed",
+            width: "100vw",
+            height: "100vh",
+            background: "black",
+            color: "white",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            fontSize: "24px",
+            zIndex: 9999,
+            cursor: "pointer",
+          }}
+        >
+          Tap to Start AR
+        </div>
+      )}
+
+      <div
+        ref={containerRef}
+        style={{
+          width: "100vw",
+          height: "100vh",
+          position: "fixed",
+          top: 0,
+          left: 0,
+          background: "black",
+        }}
+      />
+    </>
   );
 }
